@@ -1,0 +1,42 @@
+## Build results & dependencies
+**/bin/
+**/obj/
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio & IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## Logging & diagnostics
+logs/
+*.log
+logs/*
+
+## Environment & deployment secrets
+.env
+.env.*
+!.env.example
+
+## Sensitive configuration files
+**/appsettings.json
+**/appsettings.*.json
+**/appsettings-Development.json
+**/appsettings.Development.json
+!**/appsettings.Example.json
+
+## Agent rules & internal AI instructions
+.agent/rules/
+.agent/rules
+.agents/rules/
+.agents/rules
+.agents/
+
+## OS generated files
+.DS_Store
+Thumbs.db

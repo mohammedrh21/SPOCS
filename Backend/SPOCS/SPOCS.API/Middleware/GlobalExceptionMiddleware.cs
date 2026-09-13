@@ -1,0 +1,252 @@
+using SPOCS.Domain.Exceptions;
+using Microsoft.AspNetCore.Mvc;
+using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using System.Net;
+using System.Text.Json;
+
+namespace SPOCS.API.Middleware
+{
+    /// <summary>
+    /// Catches all unhandled exceptions and returns a consistent, RFC-7807-style error response.
+    /// </summary>
+    public class GlobalExceptionMiddleware
+    {
+        private readonly RequestDelegate _next;
+        private readonly ILogger<GlobalExceptionMiddleware> _logger;
+        private readonly IHostEnvironment _environment;
+
+        public GlobalExceptionMiddleware(
+            RequestDelegate next,
+            ILogger<GlobalExceptionMiddleware> logger,
+            IHostEnvironment environment)
+        {
+            _next = next;
+            _logger = logger;
+            _environment = environment;
+        }
+
+        public async Task InvokeAsync(HttpContext context)
+        {
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                await HandleExceptionAsync(context, ex);
+            }
+        }
+
+        private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+        {
+            if (context.Response.HasStarted)
+            {
+                _logger.LogWarning("Cannot handle exception – response already started.");
+                throw exception;
+            }
+
+            var errorResponse = BuildErrorResponse(context, exception);
+            LogError(context, exception, errorResponse);
+
+            context.Response.Clear();
+            context.Response.StatusCode = errorResponse.StatusCode;
+            context.Response.ContentType = "application/json";
+
+            // Always hide stack trace & inner exception in production
+            if (_environment.IsDevelopment())
+            {
+                errorResponse.StackTrace = null;
+                errorResponse.InnerException = null;
+            }
+
+            var json = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false // production should not indent JSON
+            });
+
+            await context.Response.WriteAsync(json);
+        }
+
+        private ErrorResponse BuildErrorResponse(HttpContext context, Exception exception)
+        {
+            var (statusCode, errorType, message, details) = ClassifyException(exception);
+
+            return new ErrorResponse
+            {
+                StatusCode = (int)statusCode,
+                ErrorType = errorType,
+                Message = message,
+                Details = details,
+                Path = context.Request.Path,
+                Method = context.Request.Method,
+                TraceId = context.TraceIdentifier,
+                Timestamp = DateTime.UtcNow,
+                Instance = $"{context.Request.Method} {context.Request.Path}",
+                StackTrace = exception.StackTrace,
+                InnerException = exception.InnerException?.Message
+            };
+        }
+        private static (HttpStatusCode status, string type, string message, string? details)
+            ClassifyException(Exception exception) => exception switch
+            {
+                UnAuthorizedException unAuthorized => (
+                HttpStatusCode.Unauthorized,
+                "UnAuthorized",
+                unAuthorized.Message,
+                null
+                ),
+                // ── Domain exceptions ─────────────────────────
+                NotFoundException notFound => (
+                    HttpStatusCode.NotFound,
+                    "NotFound",
+                    notFound.Message,
+                    null),
+
+                ConflictException conflict => (
+                    HttpStatusCode.Conflict,
+                    "Conflict",
+                    conflict.Message,
+                    null),
+
+                BusinessRuleException rule => (
+                    HttpStatusCode.UnprocessableEntity,
+                    "BusinessRuleViolation",
+                    rule.Message,
+                    null),
+
+                ForbiddenException forbidden => (
+                    HttpStatusCode.Forbidden,
+                    "Forbidden",
+                    forbidden.Message,
+                    null),
+
+              
+
+                InvalidCredentialsException credentials => (
+                    HttpStatusCode.Unauthorized,
+                    "InvalidCredentials",
+                    credentials.Message,
+                    null),
+
+                RegistrationFailedException regFailed => (
+                    HttpStatusCode.BadRequest,
+                    "RegistrationFailed",
+                    regFailed.Message,
+                    null),
+
+                // ── EF / SQL exceptions ───────────────────────
+                DbUpdateConcurrencyException concurrency => (
+                    HttpStatusCode.Conflict,
+                    "ConcurrencyError",
+                    "The record was modified by another user. Please refresh and try again.",
+                    $"Affected entries: {concurrency.Entries.Count}"),
+
+                DbUpdateException dbEx when dbEx.InnerException is PostgresException pgEx => (
+                    GetPostgresStatusCode(pgEx),
+                    "DatabaseError",
+                    "A database error occurred.",
+                    GetPostgresDetails(pgEx)),
+
+                // ── Standard .NET exceptions ─────────────────
+                ArgumentNullException argNull => (
+                    HttpStatusCode.BadRequest,
+                    "ArgumentNull",
+                    argNull.Message,
+                    null),
+
+                ArgumentException arg => (
+                    HttpStatusCode.BadRequest,
+                    "ArgumentError",
+                    arg.Message,
+                    null),
+
+                KeyNotFoundException key => (
+                    HttpStatusCode.NotFound,
+                    "NotFound",
+                    "The requested resource was not found.",
+                    null),
+
+                NotImplementedException notImpl => (
+                    HttpStatusCode.NotImplemented,
+                    "NotImplemented",
+                    "This feature is not yet implemented.",
+                    null),
+
+                OperationCanceledException => (
+                    HttpStatusCode.RequestTimeout,
+                    "RequestCancelled",
+                    "The request was cancelled.",
+                    null),
+
+                // ── Catch-all ───────────────────────────────
+                _ => (
+                    HttpStatusCode.InternalServerError,
+                    "InternalServerError",
+                    "An unexpected error occurred. Please try again later.",
+                    null)
+            };
+
+        private static HttpStatusCode GetPostgresStatusCode(PostgresException ex) => ex.SqlState switch
+        {
+            "23503" or "23505" => HttpStatusCode.Conflict,
+            "57014" => HttpStatusCode.RequestTimeout,
+            "28000" or "28P01" => HttpStatusCode.ServiceUnavailable,
+            _ => HttpStatusCode.InternalServerError
+        };
+ 
+        private static string GetPostgresDetails(PostgresException ex) => ex.SqlState switch
+        {
+            "23505" => "A record with this value already exists (Unique constraint violation).",
+            "23503" => "Cannot complete: the record is referenced by other data or references non-existent data (Foreign key violation).",
+            "23502" => "Cannot insert NULL into a required field.",
+            "22001" => "The provided data is too long for the target field.",
+            "40P01" => "A database deadlock occurred. Please retry the operation.",
+            "42P01" => "Database table not found. Run 'dotnet ef database update'.",
+            _ => $"PostgreSQL error: {ex.MessageText} (State: {ex.SqlState})."
+        };
+
+        private void LogError(HttpContext context, Exception exception, ErrorResponse response)
+        {
+            var level = response.StatusCode >= 500 ? LogLevel.Error : LogLevel.Warning;
+
+            _logger.Log(
+                level,
+                exception,
+                "Unhandled exception. TraceId: {TraceId} | Status: {StatusCode} | Type: {ErrorType} | " +
+                "{Method} {Path} | User: {User}",
+                response.TraceId,
+                response.StatusCode,
+                response.ErrorType,
+                response.Method,
+                response.Path,
+                context.User?.Identity?.Name ?? "Anonymous");
+        }
+    }
+
+    /// <summary>RFC-7807-inspired error response model.</summary>
+    public class ErrorResponse
+    {
+        public bool success { get; set; } = false;
+        public int StatusCode { get; set; }
+        public string ErrorType { get; set; } = default!;
+        public string Message { get; set; } = default!;
+        public string? Details { get; set; }
+        public string Path { get; set; } = default!;
+        public string Method { get; set; } = default!;
+        public string TraceId { get; set; } = default!;
+        public DateTime Timestamp { get; set; }
+        public string Instance { get; set; } = default!;
+        public string? StackTrace { get; set; }
+        public string? InnerException { get; set; }
+    }
+
+    public static class GlobalExceptionMiddlewareExtensions
+    {
+        public static IApplicationBuilder UseGlobalExceptionHandler(this IApplicationBuilder app, IWebHostEnvironment environment)
+        {
+            return app.UseMiddleware<GlobalExceptionMiddleware>();
+        }
+    }
+}

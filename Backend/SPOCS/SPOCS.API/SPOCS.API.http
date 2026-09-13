@@ -1,0 +1,112 @@
+@baseUrl = http://localhost:5107
+
+### =========================================================================
+### 1. SEMANTIC PRODUCT SEARCH (Phase 2)
+### =========================================================================
+
+### 1.1 Semantic Search: Lightweight programming laptops
+GET {{baseUrl}}/api/products/search/semantic?query=lightweight%20laptop%20for%20programming&topK=3
+Accept: application/json
+
+### 1.2 Semantic Search: Wireless noise-cancelling headphones
+GET {{baseUrl}}/api/products/search/semantic?query=wireless%20headphones%20with%20ANC&topK=3
+Accept: application/json
+
+### 1.3 Semantic Search: High-end camera phone
+GET {{baseUrl}}/api/products/search/semantic?query=phone%20with%20best%20zoom%20camera&topK=3
+Accept: application/json
+
+
+### =========================================================================
+### 2. AI SHOPPING AGENT DEMO SUITE (Phases 3 & 4)
+### =========================================================================
+
+### 2.1 Product Discovery & Use Case Matching
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "I need a laptop with long battery life for traveling and remote work.",
+  "topK": 3
+}
+
+### 2.2 Natural-Language Search Across Specifications
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Which devices in your store have a 120Hz or higher refresh rate display?",
+  "topK": 5
+}
+
+### 2.3 Strict Price Requirements (Combined Semantic + Structured Filter)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "I have a strict budget of $400 for a smartphone with good battery.",
+  "topK": 3
+}
+
+### 2.4 Feature-Specific Requirements
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Show me water-resistant smartwatches with GPS for outdoor sports and diving.",
+  "topK": 3
+}
+
+### 2.5 Product Comparison
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Compare the Samsung Galaxy S24 Ultra and the Google Pixel 9 Pro. Which one has better zoom?",
+  "topK": 3
+}
+
+### 2.6 Multi-Step Similar Product Recommendations
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What are similar alternatives to the Sony WH-1000XM5 headphones?",
+  "topK": 3
+}
+
+### 2.7 No Matching Products (Budget / Criteria Not Met)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Find me a dedicated gaming laptop under $500.",
+  "topK": 3
+}
+
+### 2.8 Ambiguous Query (Clarification / Broad Guidance)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "I want something nice.",
+  "topK": 3
+}
+
+### 2.9 Questions Unrelated to Store Products
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What is the capital of France?",
+  "topK": 3
+}
+
+### 2.10 Hallucination Prevention (Out-of-Catalog Product)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Do you have the iPhone 16 Pro Max or PlayStation 5 in stock?",
+  "topK": 3
+}

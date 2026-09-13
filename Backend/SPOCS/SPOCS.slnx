@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Presentation/">
+    <Project Path="SPOCS.API/SPOCS.API.csproj" />
+  </Folder>
+  <Project Path="SPOCS.Application/SPOCS.Application.csproj" />
+  <Project Path="SPOCS.Domain/SPOCS.Domain.csproj" />
+  <Project Path="SPOCS.Infrastructure/SPOCS.Infrastructure.csproj" />
+</Solution>
