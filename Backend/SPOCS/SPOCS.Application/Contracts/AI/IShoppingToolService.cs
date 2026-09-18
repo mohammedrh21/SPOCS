@@ -28,6 +28,7 @@ public interface IShoppingToolService
         decimal? minPrice = null,
         decimal? maxPrice = null,
         string? categorySlug = null,
+        string? brand = null,
         bool? inStockOnly = null,
         int topK = 5,
         CancellationToken cancellationToken = default);

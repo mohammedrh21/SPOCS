@@ -37,14 +37,15 @@ public class AiChatService : IAiChatService
 
         var referencedProducts = new Dictionary<Guid, ProductReferenceDto>();
 
-        // 1. Build Agent System Prompt with tool instructions
+        // 1. Build Agent System Prompt with tool instructions and few-shot guidance
         var systemInstruction = SystemPrompts.ShoppingAssistant + "\n\n" +
+            FewShotExamples.SystemPromptGuidance + "\n\n" +
             "AGENT AUTONOMY & TOOL INSTRUCTIONS:\n" +
             "1. You are equipped with real-time catalog tools: 'SearchProducts', 'GetProductDetails', and 'FindSimilarProducts'.\n" +
             "2. Whenever a customer asks for product recommendations, prices, technical specifications, or comparisons, call the appropriate tool to retrieve grounded catalog data before answering.\n" +
-            "3. When a customer specifies budget or price criteria (e.g., 'under $1000', 'between $300 and $700'), supply the numeric 'maxPrice' and/or 'minPrice' parameters to SearchProducts.\n" +
-            "4. If a tool returns 'filtered_out', explain to the customer that matching items were found but exceeded their budget/filters, citing the closest options.\n" +
-            "5. If a customer query is purely conversational (e.g., 'Hello', 'What can you do?'), answer directly without calling tools.\n" +
+            "3. When a customer specifies budget, brand, or price criteria, supply 'minPrice', 'maxPrice', 'brand', and 'categorySlug' parameters to SearchProducts.\n" +
+            "4. MULTI-TURN CONVERSATION RETENTION: Preserve established price, brand, and category constraints across conversational turns. Carry them into tool parameters on follow-ups.\n" +
+            "5. If a tool returns 'filtered_out' or zero matches, explain to the customer honestly without inventing ungrounded products.\n" +
             "6. Always ground final answers strictly in the tool results. Do not invent products or specs.";
 
         var messages = new List<ChatMessageDto>
@@ -56,15 +57,12 @@ public class AiChatService : IAiChatService
             }
         };
 
-        // Add few-shot examples
-        messages.AddRange(FewShotExamples.Examples);
-
-        // Add prior conversation history if provided (take at most last 6 for relevance)
+        // Add prior conversation history if provided (take at most last 8 turns for relevance)
         if (request.History != null && request.History.Any())
         {
             var recentHistory = request.History
                 .Where(m => m.Role is "user" or "assistant")
-                .TakeLast(6);
+                .TakeLast(8);
 
             messages.AddRange(recentHistory);
         }
@@ -141,10 +139,39 @@ public class AiChatService : IAiChatService
             finalReply = await _llmService.GenerateCompletionAsync(messages, temperature: 0.2f, cancellationToken);
         }
 
+        // Filter referenced products to only those actually cited or recommended in the final reply.
+        // This prevents unrecommended or candidate products from cluttering the UI citations.
+        var finalReferencedProducts = referencedProducts.Values.Where(p =>
+        {
+            if (string.IsNullOrWhiteSpace(finalReply)) return false;
+
+            // Direct name match or slug match
+            if (finalReply.Contains(p.Name, StringComparison.OrdinalIgnoreCase) ||
+                finalReply.Contains(p.Slug, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Word-based match for distinct product names (e.g. "Stealth 16", "MacBook Pro")
+            var distinctiveParts = p.Name.Split(new[] { ' ', '(', ')', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(part => part.Length >= 4 && !part.Equals("with", StringComparison.OrdinalIgnoreCase) && !part.Equals("inch", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            int matchedParts = distinctiveParts.Count(part => finalReply.Contains(part, StringComparison.OrdinalIgnoreCase));
+            return distinctiveParts.Any() && matchedParts >= Math.Min(2, distinctiveParts.Count);
+        }).ToList();
+
+        // If no products matched via text parsing but referencedProducts had items and final reply was non-empty,
+        // take at most the top 1 candidate product
+        if (!finalReferencedProducts.Any() && referencedProducts.Any() && !string.IsNullOrWhiteSpace(finalReply))
+        {
+            finalReferencedProducts = referencedProducts.Values.Take(1).ToList();
+        }
+
         return new ChatResponseDto
         {
             Reply = finalReply,
-            ReferencedProducts = referencedProducts.Values.ToList(),
+            ReferencedProducts = finalReferencedProducts,
             Model = _llmService.ModelName
         };
     }
@@ -165,6 +192,7 @@ public class AiChatService : IAiChatService
                     decimal? minPrice = root.TryGetProperty("minPrice", out var minP) && minP.TryGetDecimal(out var minVal) ? minVal : null;
                     decimal? maxPrice = root.TryGetProperty("maxPrice", out var maxP) && maxP.TryGetDecimal(out var maxVal) ? maxVal : null;
                     string? category = root.TryGetProperty("categorySlug", out var cat) ? cat.GetString() : null;
+                    string? brand = root.TryGetProperty("brand", out var br) ? br.GetString() : null;
                     bool? inStock = root.TryGetProperty("inStockOnly", out var st) ? st.GetBoolean() : null;
 
                     return await _toolService.SearchProductsAsync(
@@ -172,6 +200,7 @@ public class AiChatService : IAiChatService
                         minPrice: minPrice,
                         maxPrice: maxPrice,
                         categorySlug: category,
+                        brand: brand,
                         inStockOnly: inStock,
                         topK: 5,
                         cancellationToken: cancellationToken);

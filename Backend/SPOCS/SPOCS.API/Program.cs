@@ -182,23 +182,38 @@ builder.Services.AddCors(options =>
                 .Get<string[]>()
             ?? new[]
             {
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://localhost:5173",
+                "https://localhost:3000",
                 "https://localhost:5138",
                 "https://SPOCS-demo-dev.netlify.app",
                 "http://localhost:5138"
             };
 
-
-        policy
-            .WithOrigins(allowedOrigins)
-            .AllowAnyHeader()
-            .WithMethods(
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE",
-                "OPTIONS")
-            .AllowCredentials()
-            .WithExposedHeaders("Token-Expired");
+        if (builder.Environment.IsDevelopment())
+        {
+            policy
+                .SetIsOriginAllowed(_ => true)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()
+                .WithExposedHeaders("Token-Expired");
+        }
+        else
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .WithMethods(
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "DELETE",
+                    "OPTIONS")
+                .AllowCredentials()
+                .WithExposedHeaders("Token-Expired");
+        }
     });
 });
 
@@ -301,30 +316,22 @@ var app = builder.Build();
 // ============================================================
 
 // Forwarded headers must be early in the pipeline
-
 app.UseForwardedHeaders();
 
-
 // Global exception handler
-
 app.UseGlobalExceptionHandler(
     app.Environment);
 
+// CORS must be early before Redirection, Security Headers, and Rate Limiting
+app.UseCors();
 
 // Security headers
-
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
-
 // Serilog request logging
-
 app.UseSerilogRequestLogging();
 
-
-// ============================================================
 // Swagger
-// ============================================================
-
 app.UseSwagger();
 
 app.UseSwaggerUI(options =>
@@ -337,42 +344,17 @@ app.UseSwaggerUI(options =>
         "SPOCS API Documentation";
 });
 
-
-// ============================================================
 // Production Security
-// ============================================================
-
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-
-// ============================================================
-// HTTPS
-// ============================================================
-
-app.UseHttpsRedirection();
-
-
-// ============================================================
 // Response Compression
-// ============================================================
-
 app.UseResponseCompression();
 
-
-// ============================================================
-// CORS
-// ============================================================
-
-app.UseCors();
-
-
-// ============================================================
 // Rate Limiting
-// ============================================================
-
 app.UseRateLimiter();
 
 

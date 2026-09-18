@@ -1,61 +1,33 @@
-using SPOCS.Application.DTOs.AI;
-
 namespace SPOCS.Application.AI.Prompts;
 
 /// <summary>
-/// Curated few-shot conversational examples providing guidance on response style, grounding, and handling out-of-catalog inquiries.
+/// Curated few-shot examples demonstrating query interpretation, tool call parameters, and grounding.
+/// Designed to be embedded within system prompt instructions rather than injected as raw conversation turns.
 /// </summary>
 public static class FewShotExamples
 {
-    public static readonly IReadOnlyList<ChatMessageDto> Examples = new List<ChatMessageDto>
-    {
-        // Example 1: Budget & programming laptop request
-        new ChatMessageDto
-        {
-            Role = "user",
-            Content = "I need a budget laptop under $800 for programming and university."
-        },
-        new ChatMessageDto
-        {
-            Role = "assistant",
-            Content = "For programming and university coursework under $800, I recommend:\n\n" +
-                      "• **Acer Aspire 5 15.6\" FHD Laptop** — **$649.00**\n" +
-                      "  - **Processor:** Intel Core i5-1335U (10-core, up to 4.6 GHz)\n" +
-                      "  - **Memory & Storage:** 16GB DDR4 RAM, 512GB NVMe SSD\n" +
-                      "  - **Display:** 15.6\" Full HD IPS with Acer BlueLightShield\n" +
-                      "  - **Why it fits:** It easily handles code compilation, multi-tab web research, and daily student tasks well within your $800 budget.\n\n" +
-                      "Would you like to know more about its battery life or ports?"
-        },
+    public const string SystemPromptGuidance = @"
+FEW-SHOT QUERY INTERPRETATION & RETRIEVAL GUIDANCE:
 
-        // Example 2: Wireless gaming headphones
-        new ChatMessageDto
-        {
-            Role = "user",
-            Content = "Which headphones are best for wireless gaming?"
-        },
-        new ChatMessageDto
-        {
-            Role = "assistant",
-            Content = "For wireless gaming, the top choice in our catalog is:\n\n" +
-                      "• **SteelSeries Arctis Nova Pro Wireless Gaming Headset** — **$349.99**\n" +
-                      "  - **Connectivity:** Ultra-low latency 2.4GHz wireless plus concurrent Bluetooth\n" +
-                      "  - **Audio:** 40mm Neodymium drivers with 360° Spatial Audio & parametric EQ\n" +
-                      "  - **Microphone:** ClearCast Gen 2 bidirectional noise-canceling mic\n" +
-                      "  - **Key Feature:** Dual hot-swappable batteries so you never have to pause a game to charge.\n\n" +
-                      "Let me know if you'd like to compare it with any of our other audio headsets!"
-        },
+Example 1 (Brand + Budget + Category):
+Customer: ""find me MSI laptop under 2000 and upper 1500""
+Action: Call SearchProducts(query=""MSI laptop"", brand=""MSI"", categorySlug=""laptops"", minPrice=1500, maxPrice=2000)
+Behavior: If tool returns 1 MSI laptop and 1 alternative from another brand, ONLY describe the MSI laptop as an MSI laptop. Never call the alternative brand an MSI laptop!
 
-        // Example 3: Out-of-catalog inquiry
-        new ChatMessageDto
-        {
-            Role = "user",
-            Content = "Do you sell mechanical keyboards or gaming monitors?"
-        },
-        new ChatMessageDto
-        {
-            Role = "assistant",
-            Content = "We currently do not carry standalone mechanical keyboards or gaming monitors in our catalog.\n\n" +
-                      "Our current selection focuses on **Laptops**, **Smartphones**, **Headphones & Audio**, and **Smartwatches**. If you are looking for a gaming device with a built-in high refresh screen and keyboard, we do carry high-performance gaming laptops such as the **ASUS ROG Zephyrus G16** (240Hz OLED)."
-        }
-    };
+Example 2 (Multi-turn follow-up with brand constraint):
+Previous Turn: User asked for ""laptops between 1500 and 2000""
+Customer: ""i want MSI only""
+Action: Retain previous constraints! Call SearchProducts(query=""MSI laptop"", brand=""MSI"", categorySlug=""laptops"", minPrice=1500, maxPrice=2000)
+Behavior: Do NOT forget the $1500-$2000 budget! Only recommend MSI laptops in that budget.
+
+Example 3 (Feature & Use-case query):
+Customer: ""Best wireless headphones for gym and workouts""
+Action: Call SearchProducts(query=""wireless workout water resistant"", categorySlug=""headphones-audio"")
+Behavior: Recommend products that explicitly mention sweat resistance or sports fit from the retrieved items.
+
+Example 4 (Out of catalog):
+Customer: ""Do you sell microwave ovens or air fryers?""
+Action: State politely that SPOCS specializes in electronics (laptops, phones, audio, smartwatches, consoles, accessories) and does not carry home appliances.";
+
+    public static readonly IReadOnlyList<DTOs.AI.ChatMessageDto> Examples = new List<DTOs.AI.ChatMessageDto>();
 }

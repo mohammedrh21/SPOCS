@@ -39,7 +39,12 @@ public static class AgentToolDefinitions
                         categorySlug = new
                         {
                             type = "string",
-                            description = "Optional category slug to filter by: 'laptops', 'smartphones', 'headphones', 'smartwatches'"
+                            description = "Optional category slug to filter by: 'laptops', 'smartphones', 'headphones-audio', 'wearables-smartwatches', 'tablets-ereaders', 'gaming-consoles', 'computer-accessories', 'smart-home-networking'"
+                        },
+                        brand = new
+                        {
+                            type = "string",
+                            description = "Optional brand name to filter or prioritize (e.g., 'MSI', 'Apple', 'Sony', 'Samsung', 'Dell', 'HP', 'ASUS', 'Lenovo', 'Bose', 'Razer', 'Logitech')"
                         },
                         inStockOnly = new
                         {

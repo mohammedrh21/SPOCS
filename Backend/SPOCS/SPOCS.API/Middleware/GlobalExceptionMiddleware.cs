@@ -54,7 +54,7 @@ namespace SPOCS.API.Middleware
             context.Response.ContentType = "application/json";
 
             // Always hide stack trace & inner exception in production
-            if (_environment.IsDevelopment())
+            if (!_environment.IsDevelopment())
             {
                 errorResponse.StackTrace = null;
                 errorResponse.InnerException = null;
@@ -148,6 +148,13 @@ namespace SPOCS.API.Middleware
                     "DatabaseError",
                     "A database error occurred.",
                     GetPostgresDetails(pgEx)),
+
+                // ── HTTP client / external API exceptions ─────
+                HttpRequestException httpEx => (
+                    HttpStatusCode.BadGateway,
+                    "ExternalServiceError",
+                    "Could not reach the AI provider. Please check your network connection or AI configuration.",
+                    httpEx.Message),
 
                 // ── Standard .NET exceptions ─────────────────
                 ArgumentNullException argNull => (

@@ -36,12 +36,28 @@ public class ProductEmbeddingRepository : IProductEmbeddingRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<List<Guid>> SemanticSearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
+    public Task<List<Guid>> SemanticSearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
+    {
+        return SemanticSearchAsync(queryVector, topK, maxDistance: null, cancellationToken);
+    }
+
+    public async Task<List<Guid>> SemanticSearchAsync(
+        float[] queryVector,
+        int topK,
+        double? maxDistance,
+        CancellationToken cancellationToken = default)
     {
         var pgVector = new Vector(queryVector);
 
         // Use pgvector cosine distance operator (<=>), ordered ascending (closer = lower distance)
-        var results = await _context.ProductEmbeddings
+        var query = _context.ProductEmbeddings.AsNoTracking().AsQueryable();
+
+        if (maxDistance.HasValue)
+        {
+            query = query.Where(e => e.PgVector.CosineDistance(pgVector) <= maxDistance.Value);
+        }
+
+        var results = await query
             .OrderBy(e => e.PgVector.CosineDistance(pgVector))
             .Take(topK)
             .Select(e => e.ProductId)
