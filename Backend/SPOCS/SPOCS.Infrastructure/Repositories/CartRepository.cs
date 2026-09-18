@@ -31,7 +31,10 @@ public class CartRepository : ICartRepository
     public async Task CreateCartAsync(Cart cart, CancellationToken cancellationToken = default)
     {
         await _context.Carts.AddAsync(cart, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
+        // Do NOT call SaveChangesAsync here — the caller (CartService) will save
+        // everything atomically once cart items are also staged. Calling SaveChangesAsync
+        // here and then again in the service caused a DbUpdateConcurrencyException because
+        // EF Core tried to UPDATE the already-saved Cart when only an INSERT was expected.
     }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
