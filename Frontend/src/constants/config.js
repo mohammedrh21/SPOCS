@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5107/api';
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://spocs-api.onrender.com/api';
+const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+export const API_BASE_URL = cleanBaseUrl.endsWith('/api') ? cleanBaseUrl : `${cleanBaseUrl}/api`;
 
 export const DEMO_USER = {
   email: 'customer@spocs.com',
