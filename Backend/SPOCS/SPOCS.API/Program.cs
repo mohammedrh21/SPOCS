@@ -260,20 +260,29 @@ builder.Services.AddRateLimiter(options =>
 
                 // --------------------------------------------
                 // Other endpoints
-                // 100 requests / minute
+                // 300 requests / minute per user or IP
+                // A higher limit is needed because the frontend
+                // fires multiple concurrent requests on page load
+                // before the JWT is validated by the rate limiter.
                 // --------------------------------------------
+
+                // Prefer the authenticated username; fall back to
+                // the forwarded client IP (set by Render's proxy),
+                // then the direct connection IP, then "unknown".
+                var partitionKey =
+                    context.User.Identity?.Name
+                    ?? context.Request.Headers["X-Forwarded-For"]
+                        .FirstOrDefault()
+                    ?? context.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown";
 
                 return RateLimitPartition
                     .GetFixedWindowLimiter(
-                        context.User.Identity?.Name
-                            ?? context.Connection.RemoteIpAddress?
-                                .ToString()
-                            ?? "unknown",
-
+                        partitionKey,
                         _ => new FixedWindowRateLimiterOptions
                         {
                             AutoReplenishment = true,
-                            PermitLimit = 100,
+                            PermitLimit = 300,
                             QueueLimit = 0,
                             Window = TimeSpan.FromMinutes(1)
                         });

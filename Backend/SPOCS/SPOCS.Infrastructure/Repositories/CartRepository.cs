@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SPOCS.Application.Common.Exceptions;
 using SPOCS.Application.Contracts.Persistence;
 using SPOCS.Domain.Entities;
 using SPOCS.Infrastructure.Data;
@@ -39,6 +40,28 @@ public class CartRepository : ICartRepository
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Wrap in a domain-level exception so the Application layer can
+            // retry without depending on EF Core types directly.
+            throw new CartConcurrencyException(
+                "Concurrency conflict while saving cart changes.", ex);
+        }
+    }
+
+    /// <inheritdoc />
+    public void DetachAll()
+    {
+        // Detach every tracked entity so that the next query returns fresh
+        // data and EF does not carry stale concurrency tokens (e.g. the
+        // IdentityUser.ConcurrencyStamp loaded by the auth middleware).
+        foreach (var entry in _context.ChangeTracker.Entries().ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
     }
 }
