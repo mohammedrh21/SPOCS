@@ -471,6 +471,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Health check endpoints for Render and monitoring
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "SPOCS API", time = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
+
 
 // ============================================================
 // Run Application

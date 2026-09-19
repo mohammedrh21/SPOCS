@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: spocs-api
+    runtime: docker
+    rootDir: Backend/SPOCS
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: PORT
+        value: 8080
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: JwtSettings__Secret
+        generateValue: true
+      - key: JwtSettings__Issuer
+        value: https://spocs-api.onrender.com
+      - key: JwtSettings__Audience
+        value: https://spocs-api.onrender.com
+      - key: JwtSettings__ExpiryInMinutes
+        value: 10080
+      - key: AI__OpenAI__ApiKey
+        sync: false
+      - key: AI__OpenAI__BaseUrl
+        value: https://openrouter.ai/api/
+      - key: AI__OpenAI__EmbeddingModel
+        value: text-embedding-3-small
+      - key: AI__OpenAI__ChatModel
+        value: openai/gpt-4o-mini
+      - key: AllowedOrigins__0
+        value: https://spocs-demo-dev.netlify.app
+      - key: AllowedOrigins__1
+        value: http://localhost:5173
