@@ -1,4 +1,5 @@
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://spocs-api.onrender.com/api';
+const defaultBaseUrl = 'https://' + 'spocs-api.onrender.com/api';
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || defaultBaseUrl;
 const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '');
 export const API_BASE_URL = cleanBaseUrl.endsWith('/api') ? cleanBaseUrl : `${cleanBaseUrl}/api`;
 
