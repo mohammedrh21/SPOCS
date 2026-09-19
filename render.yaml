@@ -30,6 +30,6 @@ services:
       - key: AI__OpenAI__ChatModel
         value: openai/gpt-4o-mini
       - key: AllowedOrigins__0
-        value: https://spocs-demo-dev.netlify.app
+        value: https://spocs.netlify.app
       - key: AllowedOrigins__1
         value: http://localhost:5173

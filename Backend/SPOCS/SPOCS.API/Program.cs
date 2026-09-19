@@ -182,12 +182,13 @@ builder.Services.AddCors(options =>
                 .Get<string[]>()
             ?? new[]
             {
+                "https://spocs.netlify.app",
+                "https://SPOCS-demo-dev.netlify.app",
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "https://localhost:5173",
                 "https://localhost:3000",
                 "https://localhost:5138",
-                "https://SPOCS-demo-dev.netlify.app",
                 "http://localhost:5138"
             };
 

@@ -28,10 +28,10 @@ public class OpenAiLlmService : ILLMService
     {
         _httpClient = httpClientFactory.CreateClient("OpenAI");
         _model = configuration["AI:OpenAI:ChatModel"] ?? "openai/gpt-4o-mini";
-        _apiKey = configuration["AI:OpenAI:ApiKey"];
+        _apiKey = configuration["AI:OpenAI:ApiKey"]?.Trim().Trim('"');
         _logger = logger;
 
-        var baseUrl = configuration["AI:OpenAI:BaseUrl"];
+        var baseUrl = configuration["AI:OpenAI:BaseUrl"]?.Trim().Trim('"');
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
             baseUrl = _apiKey?.StartsWith("sk-or-v1-", StringComparison.OrdinalIgnoreCase) == true
@@ -46,7 +46,7 @@ public class OpenAiLlmService : ILLMService
 
         _httpClient.BaseAddress = new Uri(baseUrl);
 
-        if (!string.IsNullOrWhiteSpace(_apiKey) && _apiKey != "YOUR_OPENAI_API_KEY")
+        if (!string.IsNullOrWhiteSpace(_apiKey) && _apiKey != "YOUR_OPENAI_API_KEY" && _apiKey != "your_api_key_here")
         {
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -54,7 +54,7 @@ public class OpenAiLlmService : ILLMService
             if (baseUrl.Contains("openrouter.ai", StringComparison.OrdinalIgnoreCase))
             {
                 _httpClient.DefaultRequestHeaders.Remove("HTTP-Referer");
-                _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "https://localhost:7157");
+                _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "https://spocs.netlify.app");
                 _httpClient.DefaultRequestHeaders.Remove("X-Title");
                 _httpClient.DefaultRequestHeaders.Add("X-Title", "SPOCS");
             }
@@ -161,7 +161,7 @@ public class OpenAiLlmService : ILLMService
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError("Chat completion API failed with status {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
-            response.EnsureSuccessStatusCode();
+            throw new HttpRequestException($"AI Provider error ({response.StatusCode}): {errorBody}");
         }
 
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
