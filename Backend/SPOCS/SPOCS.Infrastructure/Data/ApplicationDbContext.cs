@@ -157,9 +157,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser ,IdentityR
         {
             entity.HasKey(c => c.Id);
 
+            // CustomerId is non-nullable — every cart must belong to a customer.
+            // The unique index (inherited from HasOne/WithOne) ensures one cart per customer.
+            entity.Property(c => c.CustomerId).IsRequired();
+
             entity.HasOne(c => c.Customer)
                 .WithOne(u => u.Cart)
                 .HasForeignKey<Cart>(c => c.CustomerId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -183,6 +188,25 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser ,IdentityR
                 .WithMany()
                 .HasForeignKey(ci => ci.ProductVariantId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Prevent duplicate line items for the same product+variant in the same cart.
+            //
+            // PostgreSQL treats multiple NULLs as distinct in a standard unique index,
+            // so we need two separate indexes:
+            //
+            // 1. Partial index (filtered) for base-product items (no variant selected):
+            //    Only one row per (CartId, ProductId) where ProductVariantId IS NULL.
+            entity.HasIndex(ci => new { ci.CartId, ci.ProductId })
+                .IsUnique()
+                .HasFilter("\"ProductVariantId\" IS NULL")
+                .HasDatabaseName("IX_CartItems_CartId_ProductId_NoVariant");
+
+            // 2. Regular unique index for variant items:
+            //    Only one row per (CartId, ProductId, ProductVariantId) where variant is set.
+            entity.HasIndex(ci => new { ci.CartId, ci.ProductId, ci.ProductVariantId })
+                .IsUnique()
+                .HasFilter("\"ProductVariantId\" IS NOT NULL")
+                .HasDatabaseName("IX_CartItems_CartId_ProductId_VariantId");
         });
 
         // Order Configuration

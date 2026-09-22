@@ -1,4 +1,3 @@
-using SPOCS.Application.Common.Exceptions;
 using SPOCS.Application.Contracts.Persistence;
 using SPOCS.Application.Contracts.Services;
 using SPOCS.Application.DTOs.Orders;
@@ -67,29 +66,12 @@ public class OrderService : IOrderService
 
         await _orderRepository.CreateOrderAsync(order, cancellationToken);
 
-        // Clear cart after successful order — retry up to 3 times to handle
-        // transient DbUpdateConcurrencyException from stale EF tracking tokens.
-        const int maxRetries = 3;
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        // Clear cart after successful order
+        if (cart.Items.Any())
         {
-            try
-            {
-                if (attempt > 1)
-                {
-                    _cartRepository.DetachAll();
-                    cart = await _cartRepository.GetCartByCustomerIdAsync(customerId, cancellationToken);
-                    if (cart == null) break;
-                }
-
-                cart!.Items.Clear();
-                cart.UpdatedAt = DateTime.UtcNow;
-                await _cartRepository.SaveChangesAsync(cancellationToken);
-                break;
-            }
-            catch (CartConcurrencyException) when (attempt < maxRetries)
-            {
-                // Retry with fresh tracking
-            }
+            _cartRepository.RemoveItems(cart.Items);
+            cart.UpdatedAt = DateTime.UtcNow;
+            await _cartRepository.SaveChangesAsync(cancellationToken);
         }
 
         // Reload with items

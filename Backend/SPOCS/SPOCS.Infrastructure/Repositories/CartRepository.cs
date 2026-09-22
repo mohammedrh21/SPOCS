@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using SPOCS.Application.Common.Exceptions;
 using SPOCS.Application.Contracts.Persistence;
 using SPOCS.Domain.Entities;
 using SPOCS.Infrastructure.Data;
@@ -22,8 +21,23 @@ public class CartRepository : ICartRepository
                 .ThenInclude(i => i.Product)
                     .ThenInclude(p => p.Images)
             .Include(c => c.Items)
-                .ThenInclude(i => i.ProductVariant)
-                    .ThenInclude(v => v!.ProductVariantOptions)
+                .ThenInclude(i => i.ProductVariant!)
+                    .ThenInclude(pv => pv.ProductVariantOptions)
+                        .ThenInclude(pvo => pvo.VariantOption)
+                            .ThenInclude(vo => vo.VariantType)
+            .FirstOrDefaultAsync(c => c.CustomerId == customerId, cancellationToken);
+    }
+
+    public async Task<Cart?> GetCartByCustomerIdNoTrackingAsync(Guid customerId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Carts
+            .AsNoTracking()
+            .Include(c => c.Items)
+                .ThenInclude(i => i.Product)
+                    .ThenInclude(p => p.Images)
+            .Include(c => c.Items)
+                .ThenInclude(i => i.ProductVariant!)
+                    .ThenInclude(pv => pv.ProductVariantOptions)
                         .ThenInclude(pvo => pvo.VariantOption)
                             .ThenInclude(vo => vo.VariantType)
             .FirstOrDefaultAsync(c => c.CustomerId == customerId, cancellationToken);
@@ -32,36 +46,25 @@ public class CartRepository : ICartRepository
     public async Task CreateCartAsync(Cart cart, CancellationToken cancellationToken = default)
     {
         await _context.Carts.AddAsync(cart, cancellationToken);
-        // Do NOT call SaveChangesAsync here — the caller (CartService) will save
-        // everything atomically once cart items are also staged. Calling SaveChangesAsync
-        // here and then again in the service caused a DbUpdateConcurrencyException because
-        // EF Core tried to UPDATE the already-saved Cart when only an INSERT was expected.
+    }
+
+    public void AddItem(CartItem item)
+    {
+        _context.CartItems.Add(item);
+    }
+
+    public void RemoveItem(CartItem item)
+    {
+        _context.CartItems.Remove(item);
+    }
+
+    public void RemoveItems(IEnumerable<CartItem> items)
+    {
+        _context.CartItems.RemoveRange(items);
     }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            // Wrap in a domain-level exception so the Application layer can
-            // retry without depending on EF Core types directly.
-            throw new CartConcurrencyException(
-                "Concurrency conflict while saving cart changes.", ex);
-        }
-    }
-
-    /// <inheritdoc />
-    public void DetachAll()
-    {
-        // Detach every tracked entity so that the next query returns fresh
-        // data and EF does not carry stale concurrency tokens (e.g. the
-        // IdentityUser.ConcurrencyStamp loaded by the auth middleware).
-        foreach (var entry in _context.ChangeTracker.Entries().ToList())
-        {
-            entry.State = EntityState.Detached;
-        }
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }
